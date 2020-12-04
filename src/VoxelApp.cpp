@@ -9,7 +9,7 @@
 int VoxelApp::width = 800;
 int VoxelApp::height = 600;
 
-VoxelApp::VoxelApp() : Monarch::Application("Voxels", width, height), octree(Octree(glm::vec3(0, 0, 0), 2.5, 5))
+VoxelApp::VoxelApp() : Monarch::Application("Voxels", width, height), octree(Octree(glm::vec3(0, 0, 0), 2.5, 6))
 {
     Monarch::CubeRenderer::init();
 
@@ -45,6 +45,14 @@ bool VoxelApp::handleKey(Monarch::KeyPressedEvent& e)
         if(cursor) window->disableCursor();
         else window->enableCursor();
         cursor = !cursor;
+    } else if(e.getKey() == GLFW_KEY_P){
+        Monarch::Camera& cam = camera.getComponent<Monarch::Camera>();
+        glm::mat4 projectionMatrix = cam.getProjectionMatrix();
+        glm::mat4 viewMatrix = cam.getViewMatrix();
+
+        Monarch::Transform trans = camera.getComponent<Monarch::Transform>();
+        std::cout << glm::to_string(trans.getPosition()) << std::endl;
+        octree.softwareRender(window->getWidth(), window->getHeight(), projectionMatrix, viewMatrix);
     }
     return false;
 }

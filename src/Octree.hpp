@@ -16,14 +16,17 @@ public:
     };
 
     void drawRegions();
-    void raycast(glm::vec3 origin, glm::vec3 direction);
+    void softwareRender(int width, int height, glm::mat4 projectionMatrix, glm::mat4 viewMatrix);
+    void raycast(glm::vec3 origin, glm::vec3 direction, std::vector<OctreeNode>& visitedLeaves);
 private:
     //struct for drawing
-    glm::vec3 depthToColor[4] = {
+    glm::vec3 depthToColor[6] = {
         glm::vec3(1, 0, 0),
         glm::vec3(0, 1, 0),
         glm::vec3(0, 0, 1),
-        glm::vec3(1, 1, 0)
+        glm::vec3(1, 1, 0),
+        glm::vec3(1, 0, 1),
+        glm::vec3(0, 1, 1)
     };
 
     int depth;
@@ -40,5 +43,5 @@ private:
     int a = 0;
     int first_node(double tx0, double ty0, double tz0, double txm, double tym, double tzm);
     int new_node(double txm, int x, double tym, int y, double tzm, int z);
-    void proc_subtree (double tx0, double ty0, double tz0, double tx1, double ty1, double tz1, OctreeNode& node);
+    void proc_subtree (double tx0, double ty0, double tz0, double tx1, double ty1, double tz1, OctreeNode& node, std::vector<OctreeNode>& visitedLeaves);
 };

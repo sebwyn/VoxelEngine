@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "CubeRenderer.hpp"
+#include "gif.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/string_cast.hpp>
@@ -17,8 +18,8 @@ void Octree::drawNode(OctreeNode& node, int d)
 {
     Monarch::CubeRenderer::CubeData data;
     data.center = node.center;
-    //data.color = depthToColor[d];
-    data.halfWidth = halfWidth / pow(2, d) - 0.01 * d;
+    if(d < 6) data.color = depthToColor[d];
+    data.halfWidth = halfWidth / pow(2, d);//- 0.001 * d;
     Monarch::CubeRenderer::drawCube(data);
     if(node.childMask != 0 && node.childMask != -1 && d != depth){
         for(int i = 0; i < 8; i++){
@@ -39,7 +40,62 @@ void Octree::drawRegions()
     Monarch::CubeRenderer::flush();
 }
 
-void Octree::raycast(glm::vec3 origin, glm::vec3 direction)
+void imageWrite(uint8_t* image, int width, int x, int y, int color)
+{
+    uint8_t* pixel = &(image[(y * width + x) * 4]);
+    pixel[0] = color >> 24 & 0xFF;
+    pixel[1] = color >> 16 & 0xFF;
+    pixel[2] = color >>  8 & 0xFF;
+    pixel[3] = color >>  0 & 0xFF;
+}
+
+void Octree::softwareRender(int width, int height, glm::mat4 projectionMatrix, glm::mat4 viewMatrix)
+{
+    std::string fileName = "Rendered.gif";
+    uint8_t image[width * height * 4]; 
+    int delay = 10;
+
+    glm::mat4 projI = glm::inverse(projectionMatrix);
+    glm::mat4 viewI = glm::inverse(viewMatrix);
+    glm::mat4 I = viewI * projI;
+    glm::vec3 camPos = viewI * glm::vec4(0, 0, 0, 1);
+
+    for(int x = 0; x < width; x++){
+        for(int y = 0; y < height; y++){
+            //get the world position of the rays pointing from the eye
+            //start by getting the normalized position of the pixel
+            glm::vec4 ndcSpace(((float)x / width)*2.0 - 1., ((float)y / height)*2.0 - 1., 1., 1.0);
+            //some fancy math I don't understand for getting clip space
+            float T1 = projectionMatrix[2][2];
+            float T2 = projectionMatrix[3][2];
+            float cameraspaceZ = -T2 / (ndcSpace.z + T1);
+            glm::vec4 clipSpace = -cameraspaceZ * ndcSpace;
+
+            glm::vec3 worldPos = I * clipSpace;
+            //std::cout << glm::to_string(worldPos) << std::endl;
+
+            std::vector<OctreeNode> visitedLeaves;
+            raycast(camPos, glm::normalize(worldPos - camPos), visitedLeaves);
+
+            //flip y in the output
+            if(!visitedLeaves.empty()){
+                imageWrite(image, width, x, height-y-1, 0xFFFFFFFF); 
+            } else {
+                imageWrite(image, width, x, height-y-1, 0x000000FF);
+            }
+             
+        }
+    }
+    std::cout << glm::to_string(projectionMatrix) << std::endl;
+    std::cout << "cameraPos: " << glm::to_string(viewI * glm::vec4(0, 0, 0, 1)) << std::endl;
+
+	GifWriter g;
+	GifBegin(&g, fileName.c_str(), width, height, delay);
+	GifWriteFrame(&g, image, width, height, delay);
+	GifEnd(&g);
+}
+
+void Octree::raycast(glm::vec3 origin, glm::vec3 direction, std::vector<OctreeNode>& visitedLeaves)
 {
     a = 0;
     // fixes for rays with negative direction
@@ -71,7 +127,7 @@ void Octree::raycast(glm::vec3 origin, glm::vec3 direction)
     double tz1 = (root->center.z + halfWidth - origin.z) * divz;
 
     if( fmax(fmax(tx0,ty0),tz0) < fmin(fmin(tx1,ty1),tz1) ){
-        proc_subtree(tx0,ty0,tz0,tx1,ty1,tz1,*(root));
+        proc_subtree(tx0,ty0,tz0,tx1,ty1,tz1,*(root), visitedLeaves);
     }
 }
 
@@ -79,7 +135,7 @@ void Octree::raycast(glm::vec3 origin, glm::vec3 direction)
 bool Octree::density(glm::vec3 pos)
 {
     bool d = sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) < 1;
-    std::cout << "Density at " << glm::to_string(pos) << " is " << d << std::endl;
+    //std::cout << "Density at " << glm::to_string(pos) << " is " << d << std::endl;
     return d; 
 }
 
@@ -170,7 +226,7 @@ int Octree::new_node(double txm, int x, double tym, int y, double tzm, int z)
     return z; // XY plane;
 }
 
-void Octree::proc_subtree (double tx0, double ty0, double tz0, double tx1, double ty1, double tz1, OctreeNode& node){
+void Octree::proc_subtree (double tx0, double ty0, double tz0, double tx1, double ty1, double tz1, OctreeNode& node, std::vector<OctreeNode>& visitedLeaves){
     float txm, tym, tzm;
     int currNode;
 
@@ -178,7 +234,7 @@ void Octree::proc_subtree (double tx0, double ty0, double tz0, double tx1, doubl
     if(tx1 < 0 || ty1 < 0 || tz1 < 0) return;
     if(!node.children){
         if(node.childMask){
-            std::cout << "Reached filled node " << std::endl;
+            visitedLeaves.push_back(node);
         }
         return;
     }
@@ -194,35 +250,35 @@ void Octree::proc_subtree (double tx0, double ty0, double tz0, double tx1, doubl
         switch (currNode)
         {
         case 0: { 
-            proc_subtree(tx0,ty0,tz0,txm,tym,tzm,node.children[a]);
+            proc_subtree(tx0,ty0,tz0,txm,tym,tzm,node.children[a], visitedLeaves);
             currNode = new_node(txm,4,tym,2,tzm,1);
             break;}
         case 1: { 
-            proc_subtree(tx0,ty0,tzm,txm,tym,tz1,node.children[1^a]);
+            proc_subtree(tx0,ty0,tzm,txm,tym,tz1,node.children[1^a], visitedLeaves);
             currNode = new_node(txm,5,tym,3,tz1,8);
             break;}
         case 2: { 
-            proc_subtree(tx0,tym,tz0,txm,ty1,tzm,node.children[2^a]);
+            proc_subtree(tx0,tym,tz0,txm,ty1,tzm,node.children[2^a], visitedLeaves);
             currNode = new_node(txm,6,ty1,8,tzm,3);
             break;}
         case 3: { 
-            proc_subtree(tx0,tym,tzm,txm,ty1,tz1,node.children[3^a]);
+            proc_subtree(tx0,tym,tzm,txm,ty1,tz1,node.children[3^a], visitedLeaves);
             currNode = new_node(txm,7,ty1,8,tz1,8);
             break;}
         case 4: { 
-            proc_subtree(txm,ty0,tz0,tx1,tym,tzm,node.children[4^a]);
+            proc_subtree(txm,ty0,tz0,tx1,tym,tzm,node.children[4^a], visitedLeaves);
             currNode = new_node(tx1,8,tym,6,tzm,5);
             break;}
         case 5: { 
-            proc_subtree(txm,ty0,tzm,tx1,tym,tz1,node.children[5^a]);
+            proc_subtree(txm,ty0,tzm,tx1,tym,tz1,node.children[5^a], visitedLeaves);
             currNode = new_node(tx1,8,tym,7,tz1,8);
             break;}
         case 6: { 
-            proc_subtree(txm,tym,tz0,tx1,ty1,tzm,node.children[6^a]);
+            proc_subtree(txm,tym,tz0,tx1,ty1,tzm,node.children[6^a], visitedLeaves);
             currNode = new_node(tx1,8,ty1,8,tzm,7);
             break;}
         case 7: { 
-            proc_subtree(txm,tym,tzm,tx1,ty1,tz1,node.children[7^a]);
+            proc_subtree(txm,tym,tzm,tx1,ty1,tz1,node.children[7^a], visitedLeaves);
             currNode = 8;
             break;}
         }
