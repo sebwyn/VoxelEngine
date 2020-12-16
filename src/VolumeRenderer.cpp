@@ -31,7 +31,9 @@ void VolumeRenderer::drawVolume(Monarch::Entity entity, glm::vec2 winDimensions)
     //get the camera position relative to the object
     glm::vec3 camPos = modelI * viewI * glm::vec4(0, 0, 0, 1); 
 
-    //bind the texture
+    // TODO: bind the texture
+    
+    
     shader->start();
     shader->setUniformMat4(projectionMatrix, "projectionMatrix");
     shader->setUniformMat4(modelI * viewI * projI, "inverseMat");

@@ -16,7 +16,7 @@ public:
     struct OctreeBlock {
         uint32_t header;
         //OctreeNodes are 32 bits or 4 bytes
-        OctreeNode data[2047]
+        OctreeNode data[2047];
     };
 
     void drawRegions();
