@@ -4,7 +4,8 @@
 #include "components/3d/FirstPersonController.hpp"
 #include "components/3d/Camera.hpp"
 
-#include "Octree.hpp"
+//#include "Octree.hpp"
+#include "Volume.hpp"
 
 class VoxelApp : public Monarch::Application {
 public:
@@ -16,11 +17,12 @@ public:
 private:
     bool handleKey(Monarch::KeyPressedEvent& e);
 
+    uint8_t density(glm::vec3 pos);
+
     static int width;
     static int height;
     bool cursor = false;
 
     Monarch::Entity camera;
-
-    Octree octree;
+    Monarch::Entity volume;
 };

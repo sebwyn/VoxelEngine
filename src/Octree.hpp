@@ -8,11 +8,15 @@ public:
     Octree(glm::vec3 center, float halfWidth, int depth); 
 
     struct OctreeNode {
-        glm::vec3 center;
-        short childMask;
-        OctreeNode* children; 
+        uint16_t childPtr;
+        uint8_t validMask, leafMask;
+    };
 
-        std::string debugID;
+    //should be 8 kb in total
+    struct OctreeBlock {
+        uint32_t header;
+        //OctreeNodes are 32 bits or 4 bytes
+        OctreeNode data[2047]
     };
 
     void drawRegions();
